@@ -4,11 +4,12 @@
 // declare 32 bit integer with side-channel
 typedef ap_axis<32, 2, 5, 6> intSdCh;
 
-void top_function(hls::stream<intSdCh> &inStream, hls::stream<intSdCh> &outStream);
+void top_function(hls::stream<intSdCh> &inStreamA, hls::stream<intSdCh> &inStreamB, hls::stream<intSdCh> &outStream);
 
 int main()
 {
-	hls::stream<intSdCh> inputStream;
+	hls::stream<intSdCh> inputStreamA;
+	hls::stream<intSdCh> inputStreamB;
 	hls::stream<intSdCh> outputStream;
 
 	for (int i = 0; i < 1000; i++) {
@@ -20,10 +21,10 @@ int main()
 		valueIn.last = 1;
 		valueIn.id = 0;
 		valueIn.dest = 0;
-		inputStream << valueIn;
+		inputStreamA << valueIn;
 	}
 
-	top_function(inputStream, outputStream);
+	top_function(inputStreamA, inputStreamB, outputStream);
 
 	for (int i = 0; i < 1000; i++) {
 		intSdCh valueOut;
