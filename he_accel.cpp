@@ -5,34 +5,6 @@
 // declare 32 bit integer with side-channel
 typedef ap_axis<32, 2, 5, 6> intSdCh;
 
-void top_function(hls::stream<intSdCh> &inStreamA, hls::stream<intSdCh> &inStreamB, hls::stream<intSdCh> &outStream) {
-
-#pragma HLS INTERFACE axis port=outStream
-#pragma HLS INTERFACE axis port=inStreamA
-#pragma HLS INTERFACE axis port=inStreamB
-#pragma HLS INTERFACE s_axilite port=return bundle=CTRL_BUS
-
-
-	for (int i = 0; i < 1000; i++) {
-
-		// Read and cache (will block if FIFO sender is empty
-		intSdCh valueIn = inStreamA.read();
-		intSdCh valueOut;
-
-		valueOut.data = valueIn.data * 5;
-
-		// copy other side-channels
-		valueOut.keep = valueIn.keep;
-		valueOut.strb = valueIn.strb;
-		valueOut.user = valueIn.user;
-		valueOut.last = valueIn.last;
-		valueOut.id = valueIn.id;
-		valueOut.dest = valueIn.dest;
-
-		outStream.write(valueOut);
-	}
-}
-
 /** termwise multiplication and addTo in Lagrange space */
 template <typename T, int KPL, int N>
 void tLweFFTAddMulRTo(T R[N], T A[KPL][N], T B[KPL][N])   {
@@ -45,25 +17,45 @@ void tLweFFTAddMulRTo(T R[N], T A[KPL][N], T B[KPL][N])   {
 	}
 }
 
-template <typename T, int DIM, int SIZE, int U, int TI, int TD>
-void wrapped_tLweFFTAddMulRTo(intSdCh in_stream[2*SIZE], intSdCh out_stream[SIZE]) {
+template <typename T, int KPL, int N>
+void wrapped_tLweFFTAddMulRTo(intSdCh in_streamA[KPL*N], intSdCh in_streamB[KPL*N], intSdCh out_stream[N]) {
 
-	ap_uint<32> A[6][1024], B[6][1024], C[1024];
-	// stream in the 2 input matrices
-	for(int i=0; i<6; i++)
-		for(int j=0; j<1024; j++){
-			int k = i*6 + j;
-			A[i][j] = pop_stream(in_stream[k]);
+	T A[KPL][N], B[KPL][N], C[N];
+
+	// stream in the 2 input matrices  (cache them basically i think)
+	int k = 0;
+	for(int i=0; i<KPL; i++)
+		for(int j=0; j<N; j++){
+			A[i][j] = pop_stream<T>(in_streamA[k]);
+			k++;
 		}
 
 
-	for (int i=0; i<6; i++)
-		for (int j=0; j<DIM; j++){
-			int k = i*6 + j + 1024;
-			B[i][j] = pop_stream(in_stream[k]);
+	int k1 = 0;
+	for (int i=0; i<KPL; i++)
+		for (int j=0; j<N; j++){
+			B[i][j] = pop_stream<T>(in_streamB[k1]);
+			k1++;
 		}
 
-	tLweFFTAddMulRTo<ap_uint<32>, 6, 1024>(C, A, B);
+	// do the computation
+	tLweFFTAddMulRTo<T, KPL, N>(C, A, B);
+
+	// stream back the results
+	for (int j=0; j<N; j++){
+		out_stream[j] =  push_stream<T>(C[j], j==1023);
+	}
+}
+
+void top_function(intSdCh inStreamA[6*1024], intSdCh inStreamB[6*1024], intSdCh outStream[1024]) {
+
+#pragma HLS INTERFACE axis port=outStream
+#pragma HLS INTERFACE axis port=inStreamA
+#pragma HLS INTERFACE axis port=inStreamB
+#pragma HLS INTERFACE s_axilite port=return bundle=CTRL_BUS
+
+	wrapped_tLweFFTAddMulRTo<ap_int<32>, 6, 1024>(inStreamA, inStreamB, outStream);
+
 }
 
 // --------------------------------------------------------
