@@ -1,5 +1,6 @@
 #include <hls_stream.h>
 #include <ap_axi_sdata.h>
+#include "he_accel.h"
 
 // declare 32 bit integer with side-channel
 typedef ap_axis<32, 2, 5, 6> intSdCh;
