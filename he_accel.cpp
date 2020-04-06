@@ -38,8 +38,8 @@ template <typename T, int KPL, int N>
 void tLweFFTAddMulRTo(T R[N], T A[KPL][N], T B[KPL][N])   {
 
 	// result = result + p*sample
-	for (int p = 0; p < KPL; ++p){
-		for (int i = 0; i < N; ++i){
+	L1:for (int p = 0; p < KPL; ++p){
+		L2:for (int i = 0; i < N; ++i){
 			R[i] += A[p][i]*B[p][i];
 		}
 	}
