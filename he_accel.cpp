@@ -69,11 +69,12 @@ void wrapped_tLweFFTAddMulRTo(intSdCh in_stream[2*SIZE], intSdCh out_stream[SIZE
 // --------------------------------------------------------
 // functions to insert and extract elements from an axi stream
 // includes conversion to correct data type
-ap_uint<32> pop_stream(intSdCh const &e)
+template <typename T>
+T pop_stream(intSdCh const &e)
 {
 #pragma HLS INLINE
 
-	ap_uint<32> ret = e.data;
+	T ret = e.data;
 
 	volatile ap_uint<32> strb = e.strb;
 	volatile ap_uint<32> keep = e.keep;
@@ -85,15 +86,16 @@ ap_uint<32> pop_stream(intSdCh const &e)
 	return ret;
 }
 
-intSdCh push_stream(ap_uint<32> const &v, bool last = false)
+template <typename T>
+intSdCh push_stream(T const &v, bool last = false)
 {
 #pragma HLS INLINE
 
 	intSdCh e;
 
 	e.data = v;
-	e.strb = (1<<32)-1;
-	e.keep = (1<<32)-1;
+	e.strb = (1<<sizeof(T))-1;
+	e.keep = (1<<sizeof(T))-1;
 	e.user = 0;
 	e.last = last ? 1 : 0;
 	e.id = 0;

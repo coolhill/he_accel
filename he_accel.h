@@ -13,6 +13,8 @@ void tLweFFTAddMulRTo(T R[N], T A[KPL][N], T B[KPL][N]);
 template <typename T, int DIM, int SIZE, int U, int TI, int TD>
 void wrapped_tLweFFTAddMulRTo(intSdCh in_stream[2*SIZE], intSdCh out_stream[SIZE]);
 
-ap_uint<32> pop_stream(intSdCh const &e);
+template <typename T>
+T pop_stream(intSdCh const &e);
 
+template <typename T>
 intSdCh push_stream(ap_uint<32> const &v, bool last);
