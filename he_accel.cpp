@@ -7,39 +7,17 @@ typedef ap_axis<32, 2, 5, 6> intSdCh;
 
 /** termwise multiplication and addTo in Lagrange space */
 template <typename T, int KPL, int N>
-void tLweFFTAddMulRTo(T R[N], T A[KPL][N], T B[KPL][N])   {
+void tLweFFTAddMul(intSdCh in_streamA[KPL*N], intSdCh in_streamB[KPL*N], intSdCh out_stream[N]) {
 
-	// result = result + p*sample
-	L1:for (int p = 0; p < KPL; ++p){
-		L2:for (int i = 0; i < N; ++i){
-			R[i] += A[p][i]*B[p][i];
-		}
-	}
-}
-
-template <typename T, int KPL, int N>
-void wrapped_tLweFFTAddMulRTo(intSdCh in_streamA[KPL*N], intSdCh in_streamB[KPL*N], intSdCh out_stream[N]) {
-
-	T A[KPL][N], B[KPL][N], C[N];
-
-	// stream in the 2 input matrices  (cache them basically i think)
-	int k = 0;
-	for(int i=0; i<KPL; i++)
-		for(int j=0; j<N; j++){
-			A[i][j] = pop_stream<T>(in_streamA[k]);
-			k++;
-		}
-
-
-	int k1 = 0;
-	for (int i=0; i<KPL; i++)
-		for (int j=0; j<N; j++){
-			B[i][j] = pop_stream<T>(in_streamB[k1]);
-			k1++;
-		}
+	T C[N];
+	for (int i = 0; i < N; i++)
+		C[i] = 0;
 
 	// do the computation
-	tLweFFTAddMulRTo<T, KPL, N>(C, A, B);
+	L1:for (int j = 0; j < KPL; j++)
+		L2:for (int i = 0; i < N; ++i)
+			C[i] += (in_streamA[i + (j*N)].data) * (in_streamB[i + (j*N)].data);
+
 
 	// stream back the results
 	for (int j=0; j<N; j++){
@@ -54,7 +32,7 @@ void top_function(intSdCh inStreamA[6*1024], intSdCh inStreamB[6*1024], intSdCh 
 #pragma HLS INTERFACE axis port=inStreamB
 #pragma HLS INTERFACE s_axilite port=return bundle=CTRL_BUS
 
-	wrapped_tLweFFTAddMulRTo<ap_int<32>, 6, 1024>(inStreamA, inStreamB, outStream);
+	tLweFFTAddMul<ap_int<32>, 6, 1024>(inStreamA, inStreamB, outStream);
 
 }
 
