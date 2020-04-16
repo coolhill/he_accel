@@ -1,48 +1,51 @@
+#include <iostream>
 #include <hls_stream.h>
 #include <ap_axi_sdata.h>
+#include <ap_int.h>
+#include "he_accel.h"
 
 // declare 32 bit integer with side-channel
-typedef ap_axis<32, 2, 5, 6> intSdCh;
+typedef ap_axis<32, 1,1,1> int_axis;
 
-void top_function(intSdCh inStreamA[6*1024], intSdCh inStreamB[6*1024], intSdCh outStream[1024]);
+void top_function(hls::stream<int_axis> &A, hls::stream<int_axis> &B, hls::stream<int_axis> &outStream);
 
 int main()
 {
+
 	// prepare data for DUT
-	intSdCh inputStreamA[6*1024];
-	intSdCh inputStreamB[6*1024];
-	intSdCh outputStream[1024];
+	hls::stream<int_axis> inputStreamA("A");
+	hls::stream<int_axis> inputStreamB("B");
+	hls::stream<int_axis> outputStream("Out");
 
-	for (int i = 0; i < 1024; i++) {
-		intSdCh valueIn;
-		valueIn.data = i;
-		valueIn.keep = 1;
-		valueIn.strb = 1;
-		valueIn.user = 1;
-		valueIn.last = 1;
-		valueIn.id = 0;
-		valueIn.dest = 0;
-		inputStreamA[i] = valueIn;
-		inputStreamB[i] = valueIn;
-	}
+	int_axis valueIn, valOut;
+	for (int j = 0; j < 2; j++) {
+		for (int i = 0; i < 1024; i++) {
 
-	for (int i = 0; i < 1024; i++) {
-			intSdCh valueIn;
 			valueIn.data = i;
-			valueIn.keep = 1;
-			valueIn.strb = 1;
-			valueIn.user = 1;
-			valueIn.last = 1;
-			valueIn.id = 0;
-			valueIn.dest = 0;
-			inputStreamA[i+1024] = valueIn;
-			inputStreamB[i+1024] = valueIn;
+			valueIn.strb = 0xf;
+			valueIn.keep = 0xf;
+			valueIn.last = 0;
+			inputStreamA << valueIn;
+			inputStreamB << valueIn;
 		}
+	}
+	for (int j = 0; j < 4; j++) {
+		for (int i = 0; i < 1024; i++) {
+
+			valueIn.data = 0;
+			valueIn.strb = 0xf;
+			valueIn.keep = 0xf;
+			valueIn.last = (j == 3 && i == 1023) ? 1 : 0;
+			inputStreamA << valueIn;
+			inputStreamB << valueIn;
+		}
+	}
 
 	top_function(inputStreamA, inputStreamB, outputStream);
 
 	for (int i = 0; i < 1024; i++) {
-		printf("Value is %d\n", (int)outputStream[i].data);
+		outputStream.read(valOut);
+		printf("Value is %d\n", (int)valOut.data);
 	}
 
 	return 0;
