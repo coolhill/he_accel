@@ -38,7 +38,32 @@ void dummy_proc_fe(
     	in.read(out[i]);
 }
 
+void dummy_proc_fe1(
+    bool direction,
+    config_t* config,
+	hls::stream<cmpxDataIn> &in,
+    cmpxDataIn out[FFT_LENGTH])
+{
+    int i;
+    config->setDir(direction);
+    config->setSch(0x2AB);
+    for (i=0; i< FFT_LENGTH; i++)
+    	in.read(out[i]);
+}
+
 void dummy_proc_be(
+    status_t* status_in,
+    bool* ovflo,
+    cmpxDataOut in[FFT_LENGTH],
+	hls::stream<cmpxDataOut> &out)
+{
+    int i;
+    for (i=0; i< FFT_LENGTH; i++)
+        out.write(in[i]);
+    *ovflo = status_in->getOvflo() & 0x1;
+}
+
+void dummy_proc_be1(
     status_t* status_in,
     bool* ovflo,
     cmpxDataOut in[FFT_LENGTH],
@@ -58,6 +83,14 @@ void fft_top(hls::stream<cmpxDataIn> &in, hls::stream<cmpxDataOut> &out, bool di
 	config_t fft_config;
 	status_t fft_status;
 
+#pragma HLS interface ap_fifo depth=1 port=ovflo
+#pragma HLS interface ap_fifo depth=1024 port=xn,xk
+#pragma HLS data_pack variable=xn
+#pragma HLS data_pack variable=xk
+#pragma HLS dataflow
+
+#pragma HLS data_pack variable=fft_config
+
 	dummy_proc_fe(direction, &fft_config, in, xn);
 
 	hls::fft<config1>(xn, xk, &fft_status, &fft_config);
@@ -66,6 +99,27 @@ void fft_top(hls::stream<cmpxDataIn> &in, hls::stream<cmpxDataOut> &out, bool di
 
 }
 
+void ifft_top(hls::stream<cmpxDataIn> &in, hls::stream<cmpxDataOut> &out, bool direction, bool* ovflo) {
+
+	cmpxDataIn xn1[FFT_LENGTH];
+	cmpxDataOut xk1[FFT_LENGTH];
+
+	config_t fft_config1;
+	status_t fft_status1;
+#pragma HLS interface ap_fifo depth=1 port=ovflo
+#pragma HLS interface ap_fifo depth=1024 port=xn1,xk1
+#pragma HLS data_pack variable=xn1
+#pragma HLS data_pack variable=xk1
+#pragma HLS dataflow
+
+#pragma HLS data_pack variable=fft_config1
+	dummy_proc_fe1(direction, &fft_config1, in, xn1);
+
+	hls::fft<config1>(xn1, xk1, &fft_status1, &fft_config1);
+
+	dummy_proc_be1(&fft_status1, ovflo, xk1, out);
+
+}
 
 void top_function(hls::stream<cmpxDataIn> &deca, hls::stream<cmpxDataIn> &gsw, hls::stream<cmpxDataOut> &outStream) {
 
@@ -84,6 +138,6 @@ void top_function(hls::stream<cmpxDataIn> &deca, hls::stream<cmpxDataIn> &gsw, h
 	tLweFFTAddMulRTo(decaFFT, gsw, tmpa);
 
 	// inverse FFT on tmpa
-	fft_top(tmpa, outStream, true, &ovflo);
+	ifft_top(tmpa, outStream, true, &ovflo);
 
 }
