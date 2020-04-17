@@ -1,80 +1,42 @@
-#include "he_accel.h"
+#include <iostream>
+#include <hls_stream.h>
+#include <ap_axi_sdata.h>
+#include <ap_int.h>
+
+typedef ap_axis<32, 1,1,1> int_axis;
 
 
-void tLweFFTAddMulRTo() {
+#include "ap_fixed.h"
+#include "hls_fft.h"
 
-}
-
-void dummy_proc_fe(
-    bool direction,
-    config_t* config,
-	hls::stream<cmpxDataIn> &in,
-    cmpxDataIn out[FFT_LENGTH])
-{
-    int i;
-    config->setDir(direction);
-    config->setSch(0x2AB);
-    for (i=0; i< FFT_LENGTH; i++)
-    	in.read(out[i]);
-}
-
-void dummy_proc_be(
-    status_t* status_in,
-    bool* ovflo,
-    cmpxDataOut in[FFT_LENGTH],
-	hls::stream<cmpxDataOut> &out)
-{
-    int i;
-    for (i=0; i< FFT_LENGTH; i++)
-        out.write(in[i]);
-    *ovflo = status_in->getOvflo() & 0x1;
-}
-
-void fft_top(hls::stream<cmpxDataIn> &in, hls::stream<cmpxDataOut> &out, bool direction, bool* ovflo) {
-
-	cmpxDataIn xn[FFT_LENGTH];
-	cmpxDataOut xk[FFT_LENGTH];
-
-	config_t fft_config;
-	status_t fft_status;
-
-	dummy_proc_fe(direction, &fft_config, in, xn);
-
-	hls::fft<config1>(xn, xk, &fft_status, &fft_config);
-
-	dummy_proc_be(&fft_status, ovflo, xk, out);
-
-}
+#include <complex>
+using namespace std;
 
 
-void top_function(hls::stream<int_axis> &A, hls::stream<int_axis> &B, hls::stream<int_axis> &outStream) {
 
-#pragma HLS INTERFACE axis port=outStream
-#pragma HLS INTERFACE axis port=A
-#pragma HLS INTERFACE axis port=B
-#pragma HLS INTERFACE s_axilite port=return bundle=ctrl
+// configurable params
+const char FFT_INPUT_WIDTH                     = 16;
+const char FFT_OUTPUT_WIDTH                    = FFT_INPUT_WIDTH;
+const char FFT_CONFIG_WIDTH                    = 16;
+const char FFT_NFFT_MAX                        = 10;
+const int  FFT_LENGTH                          = 1 << FFT_NFFT_MAX;
 
-	int_axis valOut, Aa, Bb;
+#include <complex>
+using namespace std;
 
-	int C[1024];
-	for (int i = 0; i < 1024; i++)
-		C[i] = 0;
+struct config1 : hls::ip_fft::params_t {
+    static const unsigned ordering_opt = hls::ip_fft::natural_order;
+    static const unsigned config_width = FFT_CONFIG_WIDTH;
+    static const unsigned max_nfft = FFT_NFFT_MAX;
+    static const unsigned input_width = FFT_INPUT_WIDTH;
+    static const unsigned output_width = FFT_OUTPUT_WIDTH;
+};
 
-	// do the computation
-	for (int j = 0; j < 6; j++) {
-		for (int i = 0; i < 1024; ++i) {
-			A >> Aa;
-			B >> Bb;
-			C[i] += Aa.data * Bb.data;
-		}
-	}
+typedef hls::ip_fft::config_t<config1> config_t;
+typedef hls::ip_fft::status_t<config1> status_t;
 
-	// stream back the results
-	for (int j=0; j<1024; j++){
-		valOut.data = C[j];
-		valOut.last = (j == 1023)? 1 : 0;
-		valOut.strb = 0xf;
-		valOut.keep = 0xf;
-		outStream << valOut;
-	}
-}
+typedef ap_fixed<FFT_INPUT_WIDTH,1> data_in_t;
+typedef ap_fixed<FFT_OUTPUT_WIDTH,FFT_OUTPUT_WIDTH-FFT_INPUT_WIDTH+1> data_out_t;
+typedef std::complex<data_in_t> cmpxDataIn;
+typedef std::complex<data_out_t> cmpxDataOut;
+
