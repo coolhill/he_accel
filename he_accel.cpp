@@ -1,42 +1,89 @@
-#include <iostream>
-#include <hls_stream.h>
-#include <ap_axi_sdata.h>
-#include <ap_int.h>
-
-typedef ap_axis<32, 1,1,1> int_axis;
+#include "he_accel.h"
 
 
-#include "ap_fixed.h"
-#include "hls_fft.h"
+void tLweFFTAddMulRTo(hls::stream<cmpxDataIn> &A, hls::stream<cmpxDataIn> &B,  hls::stream<cmpxDataOut> &out) {
 
-#include <complex>
-using namespace std;
+	cmpxDataOut Aa, Bb;
+	cmpxDataOut valOut;
+
+	cmpxDataOut C[1024];
+	for (int i = 0; i < 1024; i++)
+		C[i] = cmpxDataOut(0, 0);
+
+	// do the computation
+	for (int j = 0; j < 6; j++) {
+		for (int i = 0; i < 1024; ++i) {
+			A >> Aa;
+			B >> Bb;
+			C[i] += Aa * Bb;
+		}
+	}
+
+	// stream back the results
+	for (int j=0; j<FFT_LENGTH; j++){
+		out.write(C[j]);
+	}
+}
+
+void dummy_proc_fe(
+    bool direction,
+    config_t* config,
+	hls::stream<cmpxDataIn> &in,
+    cmpxDataIn out[FFT_LENGTH])
+{
+    int i;
+    config->setDir(direction);
+    config->setSch(0x2AB);
+    for (i=0; i< FFT_LENGTH; i++)
+    	in.read(out[i]);
+}
+
+void dummy_proc_be(
+    status_t* status_in,
+    bool* ovflo,
+    cmpxDataOut in[FFT_LENGTH],
+	hls::stream<cmpxDataOut> &out)
+{
+    int i;
+    for (i=0; i< FFT_LENGTH; i++)
+        out.write(in[i]);
+    *ovflo = status_in->getOvflo() & 0x1;
+}
+
+void fft_top(hls::stream<cmpxDataIn> &in, hls::stream<cmpxDataOut> &out, bool direction, bool* ovflo) {
+
+	cmpxDataIn xn[FFT_LENGTH];
+	cmpxDataOut xk[FFT_LENGTH];
+
+	config_t fft_config;
+	status_t fft_status;
+
+	dummy_proc_fe(direction, &fft_config, in, xn);
+
+	hls::fft<config1>(xn, xk, &fft_status, &fft_config);
+
+	dummy_proc_be(&fft_status, ovflo, xk, out);
+
+}
 
 
+void top_function(hls::stream<cmpxDataIn> &deca, hls::stream<cmpxDataIn> &gsw, hls::stream<cmpxDataOut> &outStream) {
 
-// configurable params
-const char FFT_INPUT_WIDTH                     = 16;
-const char FFT_OUTPUT_WIDTH                    = FFT_INPUT_WIDTH;
-const char FFT_CONFIG_WIDTH                    = 16;
-const char FFT_NFFT_MAX                        = 10;
-const int  FFT_LENGTH                          = 1 << FFT_NFFT_MAX;
+#pragma HLS INTERFACE axis port=outStream
+#pragma HLS INTERFACE axis port=deca
+#pragma HLS INTERFACE axis port=gsw
+#pragma HLS INTERFACE s_axilite port=return bundle=ctrl
 
-#include <complex>
-using namespace std;
+	hls::stream<cmpxDataOut> decaFFT;
+	hls::stream<cmpxDataOut> tmpa;
+	bool ovflo;
 
-struct config1 : hls::ip_fft::params_t {
-    static const unsigned ordering_opt = hls::ip_fft::natural_order;
-    static const unsigned config_width = FFT_CONFIG_WIDTH;
-    static const unsigned max_nfft = FFT_NFFT_MAX;
-    static const unsigned input_width = FFT_INPUT_WIDTH;
-    static const unsigned output_width = FFT_OUTPUT_WIDTH;
-};
+	// fft deca
+	fft_top(deca, decaFFT, false, &ovflo);
 
-typedef hls::ip_fft::config_t<config1> config_t;
-typedef hls::ip_fft::status_t<config1> status_t;
+	tLweFFTAddMulRTo(decaFFT, gsw, tmpa);
 
-typedef ap_fixed<FFT_INPUT_WIDTH,1> data_in_t;
-typedef ap_fixed<FFT_OUTPUT_WIDTH,FFT_OUTPUT_WIDTH-FFT_INPUT_WIDTH+1> data_out_t;
-typedef std::complex<data_in_t> cmpxDataIn;
-typedef std::complex<data_out_t> cmpxDataOut;
+	// inverse FFT on tmpa
+	fft_top(tmpa, outStream, true, &ovflo);
 
+}
