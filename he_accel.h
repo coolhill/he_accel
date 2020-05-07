@@ -15,7 +15,7 @@ using namespace std;
 
 
 // configurable params
-const char FFT_INPUT_WIDTH                     = 16;
+const char FFT_INPUT_WIDTH                     = 32;
 const char FFT_OUTPUT_WIDTH                    = FFT_INPUT_WIDTH;
 const char FFT_CONFIG_WIDTH                    = 16;
 const char FFT_NFFT_MAX                        = 10;
@@ -40,3 +40,12 @@ typedef ap_fixed<FFT_OUTPUT_WIDTH,FFT_OUTPUT_WIDTH-FFT_INPUT_WIDTH+1> data_out_t
 typedef std::complex<data_in_t> cmpxDataIn;
 typedef std::complex<data_out_t> cmpxDataOut;
 
+struct complex_axi_type{
+	cmpxDataIn data;
+    ap_uint<(32+7)/8> keep;
+    ap_uint<(32+7)/8> strb;
+    ap_uint<1>        user;
+    ap_uint<1>        last;
+    ap_uint<1>        id;
+    ap_uint<1>        dest;
+};
